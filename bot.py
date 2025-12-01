@@ -1,3 +1,4 @@
+import os
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -10,8 +11,11 @@ from telegram.ext import (
     CallbackQueryHandler
 )
 import json
-import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения
+load_dotenv()
 
 # Настройка логирования
 logging.basicConfig(
@@ -20,7 +24,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Состояния для ConversationHandler
+# Получаем переменные окружения
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+ADMIN_IDS = [int(id.strip()) for id in os.getenv('ADMIN_IDS', '').split(',') if id.strip()]
+
+# Проверка обязательных переменных
+if not BOT_TOKEN:
+    logger.error("❌ BOT_TOKEN не установлен!")
+    raise ValueError("BOT_TOKEN должен быть установлен в переменных окружения")
+
+if not ADMIN_IDS:
+    logger.warning("⚠️ ADMIN_IDS не установлены, админские функции будут недоступны")
+    ADMIN_IDS = []
+
+# Состояния для ConversationHandler (остаются без изменений)
 WAITING_FOR_FIRST_NAME = 1
 WAITING_FOR_SURNAME = 2
 ADMIN_SELECT_USER = 1
@@ -2454,6 +2471,47 @@ def main():
 
     logger.info("Бот запущен!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == '__main__':
+    main()
+
+def main():
+    """Запуск бота"""
+    # Используем токен из переменных окружения
+    if not BOT_TOKEN:
+        logger.error("❌ BOT_TOKEN не установлен!")
+        return
+    
+    application = Application.builder().token(BOT_TOKEN).build()
+
+    # Инициализация файлов при запуске
+    initialize_files()
+
+    # ... весь остальной код handlers остается без изменений ...
+
+    logger.info("Бот запущен!")
+    
+    # Для Railway используем вебхук или поллинг
+    # Определяем, работаем ли на Railway
+    if os.getenv('RAILWAY_ENVIRONMENT'):
+        # На Railway используем вебхук
+        PORT = int(os.getenv('PORT', 8080))
+        WEBHOOK_URL = os.getenv('RAILWAY_STATIC_URL')
+        
+        if WEBHOOK_URL:
+            # Настраиваем вебхук
+            application.run_webhook(
+                listen="0.0.0.0",
+                port=PORT,
+                webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+                secret_token='WEBHOOK_SECRET_TOKEN'
+            )
+        else:
+            # Если нет WEBHOOK_URL, используем поллинг
+            application.run_polling(allowed_updates=Update.ALL_TYPES)
+    else:
+        # Локально используем поллинг
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
